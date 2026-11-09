@@ -24,27 +24,29 @@
           <div class="hud-stat coins-stat"><span class="coin-icon">●</span><strong>× <span id="coins">00</span></strong></div>
           <div class="hud-stat lives-stat"><span class="hud-label">LIVES</span><strong id="lives">♥ ♥ ♥</strong></div>
           <div class="hud-stat time-stat"><span class="hud-label">TIME</span><strong id="time">300</strong></div>
+          <div class="hud-stat ability-stat"><span class="hud-label">SINGULARITY</span><strong id="abilityStatus">READY</strong></div>
         </div>
         <div class="world-progress"><span id="progress"></span></div>
         <div class="screen-overlay" id="overlay">
           <div class="overlay-card" id="overlayCard">
             <div class="mini-kicker"><span>★</span> A CLASSIC-STYLE ADVENTURE <span>★</span></div>
             <h1>MARIO<span>’S</span><br><em>MUSHROOM RUN</em></h1>
-            <p class="overlay-copy">Dash through the hills, collect the coins,<br />and make it to the flag before time runs out.</p>
+            <p class="overlay-copy">Dash through the hills, collect the coins,<br />and bend gravity with your black hole shot.</p>
             <button class="play-button" id="playButton"><span>▶</span> START ADVENTURE</button>
-            <div class="control-hint"><kbd>←</kbd><kbd>→</kbd> MOVE <i>·</i> <kbd>SPACE</kbd> JUMP</div>
+            <div class="control-hint"><kbd>←</kbd><kbd>→</kbd> MOVE <i>·</i> <kbd>SPACE</kbd> JUMP <i>·</i> <kbd>X</kbd> BLACK HOLE</div>
           </div>
         </div>
         <div class="toast" id="toast" aria-live="polite"></div>
       </div>
       <footer class="game-footer">
-        <div class="footer-tip"><span class="tip-icon">✦</span><span><b>PRO TIP</b> — Jump on enemies to stomp them!</span></div>
-        <div class="footer-controls"><span>MOVE <kbd>A</kbd><kbd>D</kbd></span><span>JUMP <kbd>W</kbd><kbd>↑</kbd><kbd>SPACE</kbd></span><span>PAUSE <kbd>P</kbd></span></div>
+        <div class="footer-tip"><span class="tip-icon">✦</span><span><b>PRO TIP</b> — Black holes pull in enemies and coins!</span></div>
+        <div class="footer-controls"><span>MOVE <kbd>A</kbd><kbd>D</kbd></span><span>JUMP <kbd>W</kbd><kbd>↑</kbd><kbd>SPACE</kbd></span><span>SHOOT <kbd>X</kbd></span><span>PAUSE <kbd>P</kbd></span></div>
       </footer>
     </section>
 
     <div class="touch-controls" aria-label="Touch game controls">
       <div class="touch-arrows"><button data-control="left" aria-label="Move left">◀</button><button data-control="right" aria-label="Move right">▶</button></div>
+      <button class="touch-shoot" data-control="shoot" aria-label="Shoot a black hole">✦ <span>BLACK HOLE</span></button>
       <button class="touch-jump" data-control="jump" aria-label="Jump">JUMP <span>⬆</span></button>
     </div>
     <div class="page-foot"><span>BUILT FOR THE JOY OF THE JOURNEY</span><span>★ <i>GOOD LUCK, HERO!</i> ★</span></div>

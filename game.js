@@ -5,10 +5,12 @@
   const $ = (s) => document.querySelector(s);
   const scoreEl = $('#score'), coinsEl = $('#coins'), livesEl = $('#lives'), timeEl = $('#time'), progressEl = $('#progress');
   const overlay = $('#overlay'), overlayCard = $('#overlayCard'), toast = $('#toast');
+  const abilityStatus = $('#abilityStatus');
   const keys = new Set(), touch = new Set();
   const levelEnd = 4540;
   let state = 'title', last = 0, elapsed = 0, camera = 0, soundOn = true, audioCtx = null, toastTimer;
-  let player, platforms, blocks, coins, enemies, particles, score, coinCount, lives, timeLeft, flagRaised;
+  let player, platforms, blocks, coins, enemies, particles, blackholes, score, coinCount, lives, timeLeft, flagRaised;
+  let blackholeCooldown = 0, shootingLast = false;
 
   const ground = [{x:0,w:1525},{x:1645,w:1445},{x:3235,w:1450}];
   const platformSeed = [
@@ -42,7 +44,8 @@
       {x:3470,y:422,w:30,h:28,vx:-50,min:3420,max:3530,alive:true},
       {x:3970,y:422,w:30,h:28,vx:55,min:3925,max:4005,alive:true}
     ];
-    particles = []; score = 0; coinCount = 0; lives = 3; timeLeft = 300; camera = 0; flagRaised = false;
+    particles = []; blackholes = []; blackholeCooldown = 0; shootingLast = false;
+    score = 0; coinCount = 0; lives = 3; timeLeft = 300; camera = 0; flagRaised = false;
     updateHud();
   }
   resetGame();
@@ -63,6 +66,8 @@
     coinsEl.textContent = String(coinCount).padStart(2,'0');
     livesEl.textContent = lives > 0 ? '♥ '.repeat(lives).trim() : '—';
     timeEl.textContent = String(Math.max(0, Math.ceil(timeLeft))).padStart(3,'0');
+    abilityStatus.textContent = blackholeCooldown <= 0 ? 'READY' : `${blackholeCooldown.toFixed(1)}s`;
+    abilityStatus.classList.toggle('ready', blackholeCooldown <= 0);
     progressEl.style.width = `${Math.max(0, Math.min(100, (player.x / levelEnd) * 100))}%`;
   }
   function showToast(text) {
@@ -126,12 +131,56 @@
   function collectCoin(c) {
     c.taken = true; coinCount++; score += 100; updateHud(); emit(c.x,c.y,'#ffd34e',5); playSound(740,.07);
   }
+  function fireBlackhole() {
+    if (state !== 'playing' || blackholeCooldown > 0) return;
+    blackholes.push({x:player.x+player.w/2+player.facing*18,y:player.y+player.h*.45,vx:player.facing*500,age:0,life:0,mode:'fly',spin:Math.random()*Math.PI*2});
+    blackholeCooldown = 1.05; playSound(145,.16,'sawtooth');
+  }
+  function updateBlackholes(dt) {
+    blackholeCooldown = Math.max(0,blackholeCooldown-dt);
+    for (const hole of blackholes) {
+      if (hole.mode === 'fly') {
+        hole.x += hole.vx*dt; hole.age += dt;
+        let impact = false;
+        for (const enemy of enemies) if (enemy.alive && Math.hypot(enemy.x+enemy.w/2-hole.x,enemy.y+enemy.h/2-hole.y)<31) impact = true;
+        if (impact || hole.age >= .48) {
+          hole.mode = 'vortex'; hole.life = 1.12; playSound(95,.12,'triangle');
+          emit(hole.x,hole.y,'#b58cff',12);
+        }
+      } else {
+        hole.life -= dt; hole.spin += dt*7;
+        const radius = 108;
+        for (const enemy of enemies) if (enemy.alive) {
+          const dx=hole.x-(enemy.x+enemy.w/2),dy=hole.y-(enemy.y+enemy.h/2),dist=Math.hypot(dx,dy);
+          if (dist<radius) {
+            if (dist<22) {
+              enemy.alive=false; score+=300; emit(enemy.x+enemy.w/2,enemy.y+enemy.h/2,'#b58cff',12); playSound(260,.08,'triangle'); updateHud();
+            } else {
+              const pull=Math.min(360*dt,dist*.62),ratio=pull/dist;
+              enemy.x+=dx*ratio; enemy.y+=dy*ratio;
+            }
+          }
+        }
+        for (const coin of coins) if (!coin.taken) {
+          const dx=hole.x-coin.x,dy=hole.y-coin.y,dist=Math.hypot(dx,dy);
+          if (dist<radius) {
+            if (dist<17) collectCoin(coin);
+            else { const pull=Math.min(420*dt,dist*.7),ratio=pull/dist; coin.x+=dx*ratio; coin.y+=dy*ratio; }
+          }
+        }
+      }
+    }
+    blackholes=blackholes.filter(h=>h.mode==='fly'?h.x>-40&&h.x<levelEnd+40:h.life>0);
+  }
   function update(dt) {
     if (state !== 'playing') return;
     timeLeft -= dt;
     if (timeLeft <= 0) { timeLeft = 0; updateHud(); finishGame(false); return; }
     const left = pressed('arrowleft','a','left'), right = pressed('arrowright','d','right');
     const jump = pressed(' ','arrowup','w','jump');
+    const shoot = pressed('x','f','shoot');
+    if (shoot && !shootingLast) fireBlackhole();
+    shootingLast = shoot;
     const speed = 235, accel = player.grounded ? 1550 : 930;
     if (left !== right) { player.vx += (left ? -1 : 1) * accel * dt; player.vx = Math.max(-speed,Math.min(speed,player.vx)); player.facing = left ? -1 : 1; }
     else player.vx *= Math.pow(player.grounded ? .001 : .3,dt);
@@ -168,6 +217,7 @@
         } else loseLife();
       }
     }
+    updateBlackholes(dt);
     for (const c of coins) if (!c.taken && rects(player,{x:c.x-c.r,y:c.y-c.r+Math.sin(elapsed*4+c.bob)*3,w:c.r*2,h:c.r*2})) collectCoin(c);
     for (const p of particles) {p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=380*dt;p.life-=dt;}
     particles=particles.filter(p=>p.life>0);
@@ -226,6 +276,30 @@
     ctx.fillStyle='#513a3c';ctx.fillRect(x+3,y+22,9,6);ctx.fillRect(x+19,y+22,9,6);ctx.fillStyle='#9d533d';ctx.beginPath();ctx.ellipse(x+15,y+14,15,14,0,Math.PI,Math.PI*2);ctx.lineTo(x+30,y+22);ctx.quadraticCurveTo(x+15,y+31,x,y+22);ctx.closePath();ctx.fill();
     ctx.fillStyle='#f8edd2';ctx.fillRect(x+8,y+12,6,8);ctx.fillRect(x+18,y+12,6,8);ctx.fillStyle='#293c4a';ctx.fillRect(x+11,y+15,3,5);ctx.fillRect(x+20,y+15,3,5);ctx.strokeStyle='#4b302e';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+7,y+11);ctx.lineTo(x+14,y+13);ctx.moveTo(x+18,y+13);ctx.lineTo(x+25,y+11);ctx.stroke();
   }
+  function drawBlackholes() {
+    for (const hole of blackholes) {
+      const x=hole.x-camera,y=hole.y;
+      if(x<-140||x>W+140)continue;
+      if(hole.mode==='fly') {
+        ctx.save();
+        ctx.shadowColor='#9b62ff';ctx.shadowBlur=18;ctx.fillStyle='#160d2b';ctx.beginPath();ctx.arc(x,y,11,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle='#e2c6ff';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(x,y,17,6,hole.spin,0,Math.PI*2);ctx.stroke();
+        ctx.restore();
+      } else {
+        const pulse=1+Math.sin(elapsed*15+hole.spin)*.08, radius=35*pulse;
+        ctx.save();ctx.translate(x,y);ctx.rotate(hole.spin);
+        ctx.globalAlpha=Math.min(1,hole.life*2);
+        ctx.strokeStyle='#a968ff';ctx.lineWidth=3;ctx.shadowColor='#8c4bea';ctx.shadowBlur=22;
+        ctx.beginPath();ctx.ellipse(0,0,radius*1.6,radius*.48,0,0,Math.PI*2);ctx.stroke();
+        ctx.strokeStyle='#e5c4ff';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,0,radius*1.25,radius*.34,Math.PI/5,0,Math.PI*2);ctx.stroke();
+        const glow=ctx.createRadialGradient(0,0,3,0,0,radius);
+        glow.addColorStop(0,'#05030a');glow.addColorStop(.58,'#160d2b');glow.addColorStop(.78,'#6e35b8cc');glow.addColorStop(1,'#a56aff00');
+        ctx.fillStyle=glow;ctx.beginPath();ctx.arc(0,0,radius,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#08050e';ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
   function drawHero() {
     if(player.invuln>0&&Math.floor(elapsed*12)%2===0)return;
     const x=player.x-camera,y=player.y,dir=player.facing;ctx.save();ctx.translate(x+player.w/2,y);ctx.scale(dir,1);
@@ -244,7 +318,7 @@
     for(let i=0;i<16;i++){const wx=i*287+155,sx=wx-camera;if(sx<0||sx>W)continue;ctx.fillStyle='#438e52';ctx.fillRect(sx,438,2,12);ctx.fillStyle=i%2?'#fff5db':'#ff8290';ctx.beginPath();ctx.arc(sx,436,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fbd04c';ctx.beginPath();ctx.arc(sx,436,1.5,0,Math.PI*2);ctx.fill();}
     drawGround();for(const p of platforms)drawPlatform(p);for(const b of blocks)drawBlock(b);for(const c of coins)drawCoin(c);drawFlag();for(const e of enemies)drawEnemy(e);
     for(const p of particles){ctx.globalAlpha=Math.max(0,p.life*2);ctx.fillStyle=p.color;ctx.fillRect(p.x-camera,p.y,p.size,p.size);ctx.globalAlpha=1;}
-    drawHero();const vignette=ctx.createLinearGradient(0,0,0,H);vignette.addColorStop(0,'#18395112');vignette.addColorStop(.28,'transparent');vignette.addColorStop(1,'#342b2520');ctx.fillStyle=vignette;ctx.fillRect(0,0,W,H);
+    drawBlackholes();drawHero();const vignette=ctx.createLinearGradient(0,0,0,H);vignette.addColorStop(0,'#18395112');vignette.addColorStop(.28,'transparent');vignette.addColorStop(1,'#342b2520');ctx.fillStyle=vignette;ctx.fillRect(0,0,W,H);
   }
   function frame(now) {
     const dt=Math.min(.033,(now-last)/1000||0);last=now;elapsed+=dt;update(dt);draw();requestAnimationFrame(frame);
